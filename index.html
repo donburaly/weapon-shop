@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>武器屋販売計算機 v2.2</title>
+<style>
+body{
+    font-family:sans-serif;
+    background:#1e1e1e;
+    color:#fff;
+    margin:15px;
+}
+
+.header{
+    position:sticky;
+    top:0;
+    background:#2a2a2a;
+    padding:18px;
+    border-radius:10px;
+    margin-bottom:20px;
+    z-index:100;
+}
+
+.header-flex{
+    display:flex;
+    justify-content:space-between;
+    gap:20px;
+    align-items:flex-start;
+}
+
+.summary{
+    flex:1;
+}
+
+.order-list{
+    width:350px;
+    background:#1f1f1f;
+    padding:12px;
+    border-radius:8px;
+    border-left:4px solid #ffd700;
+}
+
+.order-list h3{
+    margin-top:0;
+    margin-bottom:10px;
+}
+
+.total-kanji{
+    font-size:34px;
+    font-weight:bold;
+    color:#ffd700;
+}
+
+.total-number{
+    font-size:22px;
+    margin-top:8px;
+}
+
+.total-count{
+    margin-top:8px;
+    font-size:18px;
+}
+
+button{
+    padding:8px 12px;
+    border:none;
+    border-radius:8px;
+    cursor:pointer;
+    margin:2px;
+    color:white;
+}
+
+.copy-btn{background:#4caf50;}
+.reset-btn{background:#d32f2f;}
+
+.clear-btn{
+    background:#616161;
+    width:100%;
+    margin-top:8px;
+}
+
+.qty-row button{
+    background:#111;
+    color:white;
+    border:1px solid #555;
+    font-weight:bold;
+    min-width:50px;
+}
+
+.qty-row button:hover{
+    background:#222;
+}
+
+.grid{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:15px;
+}
+
+.weapon-card{
+    background:#243447;
+    border-left:4px solid #4f83b8;
+    padding:15px;
+    border-radius:10px;
+}
+
+.skin-card{
+    background:#332845;
+    border-left:4px solid #8c6bb1;
+    padding:15px;
+    border-radius:10px;
+}
+
+.item-name{
+    font-weight:bold;
+    font-size:18px;
+}
+
+.price{
+    color:#cfe8ff;
+    margin:8px 0;
+}
+
+.qty-row{
+    display:flex;
+    gap:4px;
+    align-items:center;
+    flex-wrap:wrap;
+}
+
+.qty-input{
+    width:70px;
+    padding:6px;
+    font-size:16px;
+}
+
+.small-total{
+    margin-top:10px;
+    color:#ffd700;
+}
+
+@media(max-width:768px){
+    .grid{
+        grid-template-columns:1fr;
+    }
+
+    .header-flex{
+        flex-direction:column;
+    }
+
+    .order-list{
+        width:auto;
+    }
+
+    .total-kanji{
+        font-size:26px;
+    }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+    <div class="header-flex">
+
+        <div class="summary">
+            <div>合計金額</div>
+            <div id="totalKanji" class="total-kanji">0㌦</div>
+            <div id="totalNumber" class="total-number">0</div>
+            <div id="totalCount" class="total-count">販売数: 0</div>
+
+            <div style="margin-top:10px;">
+                <button id="copyBtn" class="copy-btn" onclick="copyTotal()">合計をコピー</button>
+                <button class="reset-btn" onclick="resetAll()">初期化</button>
+            </div>
+        </div>
+
+        <div class="order-list">
+            <h3>注文内容</h3>
+            <div id="orderContents">商品が追加されると表示されます</div>
+        </div>
+
+    </div>
+</div>
+
+<h2>武器販売</h2>
+<div id="weaponGrid" class="grid"></div>
+
+<h2>スキンガチャ</h2>
+<div id="skinGrid" class="grid"></div>
+
+<script>
+const weaponItems=[
+    ["アドバンスライフル",1000000],
+    ["ブルパップライフル",1000000],
+    ["カービンライフル",1000000],
+    ["ピストル",200000],
+    ["ヘヴィアーマー",800000],
+    ["グレネード",200000],
+    ["5.56アモ",1000],
+    ["ピストルアモ",1000],
+    ["拡張マガジン",250000],
+    ["サプレッサー",250000]
+];
+
+const skinItems=[
+    ["アニメーション",1500000],
+    ["レジェンダリー",1200000],
+    ["エリート",1000000],
+    ["ベーシック",800000],
+    ["ネイチャー",700000],
+    ["アンティーク",500000],
+    ["ネオン",400000],
+    ["ごちゃまぜガチャ",200000]
+];
+
+function jpMoney(num){
+    if(num===0)return "0";
+
+    const oku=Math.floor(num/100000000);
+    const man=Math.floor((num%100000000)/10000);
+    const rest=num%10000;
+
+    let r="";
+    if(oku)r+=oku+"億";
+    if(man)r+=man+"万";
+    if(rest)r+=rest;
+
+    return r;
+}
+
+function createCards(items,targetId,type){
+    const target=document.getElementById(targetId);
+
+    items.forEach((item,idx)=>{
+        const card=document.createElement("div");
+        card.className=type;
+
+        card.innerHTML=`
+            <div class="item-name">${item[0]}</div>
+            <div class="price">${item[1]}㌦</div>
+
+            <div class="qty-row">
+                <button onclick="changeQty('${targetId}',${idx},-1)">-1</button>
+                <input class="qty-input" type="number" min="0" value="0" data-name="${item[0]}" data-price="${item[1]}" oninput="calculateTotal()">
+                <button onclick="changeQty('${targetId}',${idx},1)">+1</button>
+                <button onclick="changeQty('${targetId}',${idx},5)">+5</button>
+                <button onclick="changeQty('${targetId}',${idx},10)">+10</button>
+            </div>
+
+            <button class="clear-btn" onclick="clearItem('${targetId}',${idx})">この商品をクリア</button>
+
+            <div class="small-total">
+                小計: <span class="subKanji">0㌦</span><br>
+                <span class="subNum">0</span>
+            </div>
+        `;
+
+        target.appendChild(card);
+    });
+}
+
+createCards(weaponItems,"weaponGrid","weapon-card");
+createCards(skinItems,"skinGrid","skin-card");
+
+function changeQty(gridId,index,amount){
+    const input=document.getElementById(gridId).children[index].querySelector("input");
+    input.value=Math.max(0,(parseInt(input.value)||0)+amount);
+    calculateTotal();
+}
+
+function clearItem(gridId,index){
+    const input=document.getElementById(gridId).children[index].querySelector("input");
+    input.value=0;
+    calculateTotal();
+}
+
+function calculateTotal(){
+    let total=0;
+    let count=0;
+    let orders=[];
+
+    document.querySelectorAll("input").forEach(input=>{
+        const qty=parseInt(input.value)||0;
+        const price=parseInt(input.dataset.price);
+        const name=input.dataset.name;
+
+        const sub=qty*price;
+
+        total+=sub;
+        count+=qty;
+
+        if(qty>0){
+            orders.push(`${name} × ${qty}`);
+        }
+
+        const card=input.closest(".weapon-card, .skin-card");
+        card.querySelector(".subKanji").textContent=jpMoney(sub)+"㌦";
+        card.querySelector(".subNum").textContent=sub;
+    });
+
+    document.getElementById("totalKanji").textContent=jpMoney(total)+"㌦";
+    document.getElementById("totalNumber").textContent=total;
+    document.getElementById("totalCount").textContent="販売数: "+count;
+
+    document.getElementById("orderContents").innerHTML=
+        orders.length ? orders.join("<br>") : "商品が追加されると表示されます";
+}
+
+async function copyTotal(){
+    const txt=document.getElementById("totalNumber").textContent;
+
+    try{
+        await navigator.clipboard.writeText(txt);
+    }catch{
+        const t=document.createElement("textarea");
+        t.value=txt;
+        document.body.appendChild(t);
+        t.select();
+        document.execCommand("copy");
+        t.remove();
+    }
+
+    const btn=document.getElementById("copyBtn");
+    const old=btn.textContent;
+
+    btn.textContent="コピー完了！";
+
+    setTimeout(()=>{
+        btn.textContent=old;
+    },2000);
+}
+
+function resetAll(){
+    document.querySelectorAll("input").forEach(i=>i.value=0);
+    calculateTotal();
+}
+
+calculateTotal();
+</script>
+
+</body>
+</html>
